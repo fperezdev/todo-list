@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, RefreshCw, SkipForward } from "lucide-react";
+import { CheckCircle, Repeat, SkipForward } from "lucide-react";
 import type { Task } from "@/lib/types";
 
 interface TaskItemProps {
@@ -16,13 +16,13 @@ export default function TaskItem({ task, isCompletedToday, isSkippedToday, onCom
 
   return (
     <div
-      className={`rounded-xl border bg-white p-2 transition-opacity dark:bg-gray-900 ${
+      className={`rounded-xl border bg-white px-3 py-2 transition-opacity dark:bg-gray-900 ${
         isDone
           ? "border-green-200 opacity-60 dark:border-green-900"
           : "border-gray-200 dark:border-gray-800"
       }`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <button
             onClick={() => navigate(`/edit/${task.id}`)}
@@ -31,7 +31,7 @@ export default function TaskItem({ task, isCompletedToday, isSkippedToday, onCom
             {task.title}
           </button>
           {task.is_recurring === 1 && (
-            <RefreshCw size={14} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
+            <Repeat size={14} className="text-indigo-500 dark:text-indigo-400 shrink-0" />
           )}
           {isCompletedToday && (
             <CheckCircle size={14} className="text-green-500 dark:text-green-400 shrink-0" />

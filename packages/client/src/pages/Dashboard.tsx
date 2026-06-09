@@ -248,7 +248,7 @@ export default function Dashboard() {
           </h2>
           <Link
             to="/add"
-            className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-lg font-medium text-white hover:bg-indigo-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-xl font-medium text-white hover:bg-indigo-700"
             title="Nueva tarea"
           >
             +
@@ -284,23 +284,25 @@ export default function Dashboard() {
       </div>
 
       {/* Managed tasks */}
-      {managedTasks.length > 0 && (
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <button
-              onClick={() => setManagedOpen(!managedOpen)}
-              className="flex items-center gap-1 text-sm font-medium text-gray-500"
-            >
-              Gestionadas ({managedTasks.length})
-              <ChevronDown
-                size={16}
-                className={`transition-transform ${managedOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-          </div>
-          {managedOpen && (
-            <div className="space-y-2">
-              {managedTasks.map(({ task, status }) => (
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <button
+            onClick={() => setManagedOpen(!managedOpen)}
+            className="flex items-center gap-1 text-sm font-medium text-gray-500"
+          >
+            Gestionadas ({managedTasks.length})
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${managedOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+        {managedOpen && (
+          <div className="space-y-2">
+            {managedTasks.length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-4">Sin tareas gestionadas</p>
+            ) : (
+              managedTasks.map(({ task, status }) => (
                 <TaskItem
                   key={task.id}
                   task={task}
@@ -309,11 +311,11 @@ export default function Dashboard() {
                   onComplete={handleComplete}
                   onSkip={handleSkip}
                 />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="h-20" />
     </div>
