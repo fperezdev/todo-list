@@ -46,7 +46,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [managedOpen, setManagedOpen] = useState(false);
+  const [managedOpen, setManagedOpen] = useState(true);
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
 
   const today = getTodayDate();
@@ -283,23 +283,23 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Managed tasks accordion */}
+      {/* Managed tasks */}
       {managedTasks.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <button
-            onClick={() => setManagedOpen(!managedOpen)}
-            className="flex w-full items-center justify-between p-4 text-left"
-          >
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Tareas gestionadas ({managedTasks.length})
-            </span>
-            <ChevronDown
-              size={18}
-              className={`text-gray-400 transition-transform ${managedOpen ? "rotate-180" : ""}`}
-            />
-          </button>
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <button
+              onClick={() => setManagedOpen(!managedOpen)}
+              className="flex items-center gap-1 text-sm font-medium text-gray-500"
+            >
+              Gestionadas ({managedTasks.length})
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${managedOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </div>
           {managedOpen && (
-            <div className="space-y-2 border-t border-gray-200 p-4 dark:border-gray-800">
+            <div className="space-y-2">
               {managedTasks.map(({ task, status }) => (
                 <TaskItem
                   key={task.id}

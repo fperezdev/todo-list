@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Pencil, SkipForward } from "lucide-react";
+import { CheckCircle, Pencil, RefreshCw, SkipForward } from "lucide-react";
 import type { Task } from "@/lib/types";
 
 interface TaskItemProps {
@@ -24,28 +24,24 @@ export default function TaskItem({ task, isCompletedToday, isSkippedToday, onCom
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <h3
-            className={`text-sm font-medium ${isDone ? "line-through text-gray-400" : "text-gray-900 dark:text-gray-100"}`}
-          >
-            {task.title}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3
+              className={`text-sm font-medium ${isDone ? "line-through text-gray-400" : "text-gray-900 dark:text-gray-100"}`}
+            >
+              {task.title}
+            </h3>
+            {task.is_recurring === 1 && (
+              <RefreshCw size={14} className="text-indigo-500 dark:text-indigo-400" />
+            )}
+            {isCompletedToday && (
+              <CheckCircle size={14} className="text-green-500 dark:text-green-400" />
+            )}
+            {isSkippedToday && (
+              <SkipForward size={14} className="text-yellow-500 dark:text-yellow-400" />
+            )}
+          </div>
           {task.description && (
             <p className="mt-0.5 text-xs text-gray-400 line-clamp-2">{task.description}</p>
-          )}
-          {task.is_recurring === 1 && (
-            <span className="mt-1 inline-block rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-              Repetitiva
-            </span>
-          )}
-          {isCompletedToday && (
-            <span className="mt-1 ml-1 inline-block rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600 dark:bg-green-500/10 dark:text-green-400">
-              Completada
-            </span>
-          )}
-          {isSkippedToday && (
-            <span className="mt-1 ml-1 inline-block rounded-full bg-yellow-50 px-2 py-0.5 text-xs text-yellow-600 dark:bg-yellow-500/10 dark:text-yellow-400">
-              Omitida
-            </span>
           )}
         </div>
 
