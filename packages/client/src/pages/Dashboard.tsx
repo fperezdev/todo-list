@@ -211,24 +211,17 @@ export default function Dashboard() {
         <title>Todo List - Inicio</title>
       </Helmet>
 
-      {/* Date navigation */}
+      {/* Date navigation - full width with arrows at extremes */}
       <div className="flex items-center justify-between">
+        <button
+          onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          title="Día anterior"
+        >
+          <ChevronLeft size={20} />
+        </button>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSelectedDate(addDays(selectedDate, -1))}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Día anterior"
-          >
-            <ChevronLeft size={20} />
-          </button>
           <h1 className="text-xl font-bold">{dateLabel}</h1>
-          <button
-            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Día siguiente"
-          >
-            <ChevronRight size={20} />
-          </button>
           {!isViewingToday && (
             <button
               onClick={() => setSelectedDate(today)}
@@ -238,19 +231,29 @@ export default function Dashboard() {
             </button>
           )}
         </div>
-        <Link
-          to="/add"
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        <button
+          onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          title="Día siguiente"
         >
-          + Nueva
-        </Link>
+          <ChevronRight size={20} />
+        </button>
       </div>
 
       {/* Pending tasks */}
       <div>
-        <h2 className="mb-3 text-sm font-medium text-gray-500">
-          Pendientes ({pendingTasks.length})
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-gray-500">
+            Pendientes ({pendingTasks.length})
+          </h2>
+          <Link
+            to="/add"
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-lg font-medium text-white hover:bg-indigo-700"
+            title="Nueva tarea"
+          >
+            +
+          </Link>
+        </div>
         {pendingTasks.length === 0 ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center dark:border-gray-800 dark:bg-gray-900">
             <p className="text-gray-400">No hay tareas pendientes</p>
@@ -262,7 +265,7 @@ export default function Dashboard() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {pendingTasks.map((task) => {
               const status = getTaskStatus(task.id);
               return (
@@ -296,7 +299,7 @@ export default function Dashboard() {
             />
           </button>
           {managedOpen && (
-            <div className="space-y-3 border-t border-gray-200 p-4 dark:border-gray-800">
+            <div className="space-y-2 border-t border-gray-200 p-4 dark:border-gray-800">
               {managedTasks.map(({ task, status }) => (
                 <TaskItem
                   key={task.id}
