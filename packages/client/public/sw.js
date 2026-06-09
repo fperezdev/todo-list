@@ -1,4 +1,4 @@
-const CACHE = "todo-list-v1";
+const CACHE = "todo-list-v2";
 const PRE_CACHED = ["/", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
