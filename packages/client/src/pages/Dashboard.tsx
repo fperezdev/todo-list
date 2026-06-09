@@ -3,10 +3,9 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { getDB } from "@/lib/db";
-import { getTodayDate, getWeekdaysArray, getLastNDays, WEEKDAY_NAMES, toDateString } from "@/lib/utils";
+import { getTodayDate, getWeekdaysArray, toDateString } from "@/lib/utils";
 import type { Task, TaskCompletion } from "@/lib/types";
 import TaskItem from "@/components/TaskItem";
-import CompletionChart from "@/components/CompletionChart";
 import Spinner from "@/components/Spinner";
 
 const MONTH_NAMES: Record<number, string> = {
@@ -47,9 +46,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
   const [managedOpen, setManagedOpen] = useState(false);
-  const [pendingOpen, setPendingOpen] = useState(true);
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
 
   const today = getTodayDate();
@@ -89,20 +86,17 @@ export default function Dashboard() {
       );
 
       if (existing) {
-        // Soft-delete existing completion for selected date
         await db.exec({
           sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
           bind: [now, now, existing.id],
         });
       }
 
-      // If toggling off (was already completed), we're done
       if (existing && existing.status === "completed") {
         await loadData();
         return;
       }
 
-      // Insert new completed record (fresh or switching from skipped)
       const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?)`,
@@ -122,20 +116,17 @@ export default function Dashboard() {
       );
 
       if (existing) {
-        // Soft-delete existing completion for selected date
         await db.exec({
           sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
           bind: [now, now, existing.id],
         });
       }
 
-      // If toggling off (was already skipped), we're done
       if (existing && existing.status === "skipped") {
         await loadData();
         return;
       }
 
-      // Insert new skipped record (fresh or switching from completed)
       const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'skipped', ?, ?)`,
@@ -145,26 +136,37 @@ export default function Dashboard() {
     } catch {}
   }, [selectedDate, loadData, completions]);
 
-  // Filter tasks for selected date
-  const todayTasks = useMemo(() => {
+  // Pending tasks: tasks that should appear on selected date and don't have completion yet
+  const pendingTasks = useMemo(() => {
     return tasks.filter((task) => {
+      // Check if task has completion on selected date - if so, it's managed, not pending
+      const hasCompletion = completions.some(
+        (c) => c.task_id === task.id && c.completion_date === selectedDate
+      );
+      if (hasCompletion) return false;
+
+      // Task must be created on or before selected date
+      const taskCreatedDate = task.created_at.split("T")[0].split(" ")[0]; // Extract YYYY-MM-DD
+      if (taskCreatedDate > selectedDate) return false;
+
       if (task.is_recurring === 1) {
         const weekdays = getWeekdaysArray(task.weekdays);
         return weekdays.includes(selectedDayOfWeek);
       }
-      // One-time task: show if not completed/skipped on selected date
-      const dateCompletion = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === selectedDate
-      );
-      if (dateCompletion) return false; // already completed or skipped
-      return true;
+      
+      // One-time task: only show on the exact date it was created
+      return taskCreatedDate === selectedDate;
     });
   }, [tasks, completions, selectedDate, selectedDayOfWeek]);
 
-  // Tasks completed or skipped on selected date
+  // Managed tasks: tasks with completion on selected date
   const managedTasks = useMemo(() => {
     return tasks
       .filter((task) => {
+        // Task must be created on or before selected date
+        const taskCreatedDate = task.created_at.split("T")[0].split(" ")[0];
+        if (taskCreatedDate > selectedDate) return false;
+
         const comp = completions.find(
           (c) => c.task_id === task.id && c.completion_date === selectedDate
         );
@@ -178,8 +180,7 @@ export default function Dashboard() {
       });
   }, [tasks, completions, selectedDate]);
 
-  // Check if a task is completed/skipped on selected date
-  const getTaskTodayStatus = useCallback(
+  const getTaskStatus = useCallback(
     (taskId: string): { completed: boolean; skipped: boolean } => {
       const comp = completions.find(
         (c) => c.task_id === taskId && c.completion_date === selectedDate
@@ -192,147 +193,6 @@ export default function Dashboard() {
     },
     [completions, selectedDate]
   );
-
-  // Weekly chart data
-  const weeklyChartData = useMemo(() => {
-    const days = [0, 1, 2, 3, 4, 5, 6];
-    return days.map((day) => {
-      const dayTasks = tasks.filter((task) => {
-        if (task.is_recurring === 1) {
-          const weekdays = getWeekdaysArray(task.weekdays);
-          return weekdays.includes(day);
-        }
-        return true;
-      });
-      const totalTasks = dayTasks.length;
-      if (totalTasks === 0) return { day, dayName: WEEKDAY_NAMES[day], percentage: 0 };
-
-      // Count completions for this weekday over all time
-      let completedCount = 0;
-      for (const task of dayTasks) {
-        const taskCompletions = completions.filter(
-          (c) => c.task_id === task.id && c.status === "completed"
-        );
-        if (taskCompletions.length > 0) completedCount++;
-      }
-      const percentage = (completedCount / totalTasks) * 100;
-      return { day, dayName: WEEKDAY_NAMES[day], percentage };
-    });
-  }, [tasks, completions]);
-
-  // Daily chart data (last 30 days)
-  const dailyChartData = useMemo(() => {
-    const last30 = getLastNDays(30);
-    return last30.map((date) => {
-      const d = new Date(date + "T12:00:00");
-      const dayOfWeek = d.getDay();
-
-      // Count tasks visible on this date
-      const visibleTasks = tasks.filter((task) => {
-        if (task.deleted_at) return false;
-        if (task.created_at > date) return false;
-        if (task.is_recurring === 1) {
-          const weekdays = getWeekdaysArray(task.weekdays);
-          return weekdays.includes(dayOfWeek);
-        }
-        return true;
-      });
-
-      const totalTasks = visibleTasks.length;
-      if (totalTasks === 0) return { date, percentage: 0 };
-
-      // Count completions for this date
-      const dateCompletions = completions.filter(
-        (c) => c.completion_date === date && c.status === "completed"
-      );
-      const completedTaskIds = new Set(dateCompletions.map((c) => c.task_id));
-
-      let completedCount = 0;
-      for (const task of visibleTasks) {
-        if (completedTaskIds.has(task.id)) completedCount++;
-      }
-
-      const percentage = (completedCount / totalTasks) * 100;
-      return { date, percentage };
-    });
-  }, [tasks, completions]);
-
-  // Monthly chart data: group daily data into weeks
-  const monthlyChartData = useMemo(() => {
-    if (dailyChartData.length === 0) return [];
-    const groups: { label: string; percentage: number }[] = [];
-    for (let i = 0; i < dailyChartData.length; i += 7) {
-      const chunk = dailyChartData.slice(i, i + 7);
-      const avg = chunk.reduce((sum, d) => sum + d.percentage, 0) / chunk.length;
-      groups.push({
-        label: `Sem ${groups.length + 1}`,
-        percentage: Math.round(avg * 10) / 10,
-      });
-    }
-    return groups;
-  }, [dailyChartData]);
-
-  // Annual chart data: last 12 months
-  const annualChartData = useMemo(() => {
-    const result: { label: string; percentage: number }[] = [];
-    const now = new Date();
-
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = monthDate.getFullYear();
-      const month = monthDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const todayStr = toDateString(now);
-
-      const dailyPercentages: number[] = [];
-
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-        // Don't process future dates
-        if (date > todayStr) break;
-
-        const d = new Date(year, month, day, 12, 0, 0);
-        const dayOfWeek = d.getDay();
-
-        const visibleTasks = tasks.filter((task) => {
-          if (task.deleted_at) return false;
-          if (task.created_at > date) return false;
-          if (task.is_recurring === 1) {
-            const weekdays = getWeekdaysArray(task.weekdays);
-            return weekdays.includes(dayOfWeek);
-          }
-          return true;
-        });
-
-        const totalTasks = visibleTasks.length;
-        if (totalTasks === 0) continue;
-
-        const dateCompletions = completions.filter(
-          (c) => c.completion_date === date && c.status === "completed"
-        );
-        const completedTaskIds = new Set(dateCompletions.map((c) => c.task_id));
-
-        let completedCount = 0;
-        for (const task of visibleTasks) {
-          if (completedTaskIds.has(task.id)) completedCount++;
-        }
-
-        dailyPercentages.push((completedCount / totalTasks) * 100);
-      }
-
-      const avg = dailyPercentages.length > 0
-        ? dailyPercentages.reduce((s, p) => s + p, 0) / dailyPercentages.length
-        : 0;
-
-      result.push({
-        label: MONTH_NAMES[month],
-        percentage: Math.round(avg * 10) / 10,
-      });
-    }
-
-    return result;
-  }, [tasks, completions]);
 
   if (loading) {
     return (
@@ -351,80 +211,71 @@ export default function Dashboard() {
         <title>Todo List - Inicio</title>
       </Helmet>
 
-      {/* Pending tasks accordion */}
-      <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div className="flex items-center justify-between p-4">
+      {/* Date navigation */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setPendingOpen(!pendingOpen)}
-            className="flex items-center gap-2"
+            onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Día anterior"
           >
-            <span className="text-lg font-bold">{dateLabel}</span>
-            <ChevronDown
-              size={18}
-              className={`text-gray-400 transition-transform ${pendingOpen ? "rotate-180" : ""}`}
-            />
+            <ChevronLeft size={20} />
           </button>
-          <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold">{dateLabel}</h1>
+          <button
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Día siguiente"
+          >
+            <ChevronRight size={20} />
+          </button>
+          {!isViewingToday && (
             <button
-              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-              title="Día anterior"
+              onClick={() => setSelectedDate(today)}
+              className="rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
             >
-              <ChevronLeft size={18} />
+              Hoy
             </button>
-            {!isViewingToday && (
-              <button
-                onClick={() => setSelectedDate(today)}
-                className="rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
-              >
-                Hoy
-              </button>
-            )}
-            <button
-              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-              title="Día siguiente"
-            >
-              <ChevronRight size={18} />
-            </button>
+          )}
+        </div>
+        <Link
+          to="/add"
+          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          + Nueva
+        </Link>
+      </div>
+
+      {/* Pending tasks */}
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-gray-500">
+          Pendientes ({pendingTasks.length})
+        </h2>
+        {pendingTasks.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-center dark:border-gray-800 dark:bg-gray-900">
+            <p className="text-gray-400">No hay tareas pendientes</p>
             <Link
               to="/add"
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="mt-2 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
             >
-              + Nueva
+              Crear una nueva tarea
             </Link>
           </div>
-        </div>
-
-        {pendingOpen && (
-          <div className="border-t border-gray-200 p-4 dark:border-gray-800">
-            {todayTasks.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-gray-400">No hay tareas para este día</p>
-                <Link
-                  to="/add"
-                  className="mt-3 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                  Crear una nueva tarea
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {todayTasks.map((task) => {
-                  const status = getTaskTodayStatus(task.id);
-                  return (
-                    <TaskItem
-                      key={task.id}
-                      task={task}
-                      isCompletedToday={status.completed}
-                      isSkippedToday={status.skipped}
-                      onComplete={handleComplete}
-                      onSkip={handleSkip}
-                    />
-                  );
-                })}
-              </div>
-            )}
+        ) : (
+          <div className="space-y-3">
+            {pendingTasks.map((task) => {
+              const status = getTaskStatus(task.id);
+              return (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  isCompletedToday={status.completed}
+                  isSkippedToday={status.skipped}
+                  onComplete={handleComplete}
+                  onSkip={handleSkip}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -458,25 +309,6 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Chart */}
-      <CompletionChart
-        dailyData={dailyChartData}
-        weeklyData={weeklyChartData}
-        monthlyData={monthlyChartData}
-        annualData={annualChartData}
-        period={chartPeriod}
-        onPeriodChange={setChartPeriod}
-      />
-
-      {/* All tasks quick link */}
-      {tasks.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-sm font-medium text-gray-500">
-            {tasks.length} tarea{tasks.length !== 1 ? "s" : ""} en total
-          </p>
         </div>
       )}
 

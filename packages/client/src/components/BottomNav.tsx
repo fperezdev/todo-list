@@ -1,9 +1,10 @@
 import { memo } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Settings } from "lucide-react";
+import { LayoutDashboard, BarChart3, PlusCircle, Settings } from "lucide-react";
 
 const tabs = [
   { to: "/", label: "Inicio", icon: LayoutDashboard },
+  { to: "/dash", label: "Dash", icon: BarChart3 },
   { to: "/add", label: "Nueva", icon: PlusCircle },
   { to: "/settings", label: "Ajustes", icon: Settings },
 ];
