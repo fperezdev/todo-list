@@ -5,7 +5,7 @@ interface WeekdayPickerProps {
   onChange: (days: number[]) => void;
 }
 
-const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]; // 0 = Sunday ... 6 = Saturday
+const ALL_DAYS = [1, 2, 3, 4, 5, 6, 0]; // 1 = Monday ... 0 = Sunday
 
 export default function WeekdayPicker({ selected, onChange }: WeekdayPickerProps) {
   const toggleDay = (day: number) => {
