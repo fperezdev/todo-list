@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { getDB } from "@/lib/db";
-import { getWeekdaysArray, getLastNDays, WEEKDAY_NAMES, toDateString } from "@/lib/utils";
+import { getWeekdaysArray, WEEKDAY_NAMES, toDateString, getTodayDate } from "@/lib/utils";
 import type { Task, TaskCompletion } from "@/lib/types";
 import CompletionChart from "@/components/CompletionChart";
 import Spinner from "@/components/Spinner";
@@ -12,11 +12,68 @@ const MONTH_NAMES: Record<number, string> = {
   8: "Sep", 9: "Oct", 10: "Nov", 11: "Dic",
 };
 
+const WEEKDAY_FULL: Record<number, string> = {
+  0: "Domingo", 1: "Lunes", 2: "Martes", 3: "Miércoles",
+  4: "Jueves", 5: "Viernes", 6: "Sábado",
+};
+
+const WEEKDAY_SHORT = WEEKDAY_NAMES;
+
+function formatDateLabel(dateStr: string, todayStr: string): string {
+  if (dateStr === todayStr) return "Hoy";
+
+  const date = new Date(dateStr + "T12:00:00");
+  const today = new Date(todayStr + "T12:00:00");
+  const diffTime = date.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 1) return "Mañana";
+  if (diffDays === -1) return "Ayer";
+
+  const weekday = WEEKDAY_FULL[date.getDay()];
+  const day = date.getDate();
+  const month = MONTH_NAMES[date.getMonth()];
+  return `${weekday} ${day} ${month}`;
+}
+
+function calculateDayCompliance(
+  dateStr: string,
+  tasks: Task[],
+  completions: TaskCompletion[],
+): number {
+  const d = new Date(dateStr + "T12:00:00");
+  const dayOfWeek = d.getDay();
+
+  const visibleTasks = tasks.filter((task) => {
+    if (task.deleted_at) return false;
+    const taskCreatedDate = task.created_at.split("T")[0];
+    if (taskCreatedDate > dateStr) return false;
+    if (task.is_recurring === 1) {
+      const weekdays = getWeekdaysArray(task.weekdays);
+      return weekdays.includes(dayOfWeek);
+    }
+    return taskCreatedDate === dateStr;
+  });
+
+  if (visibleTasks.length === 0) return 0;
+
+  const completedCount = visibleTasks.filter((task) =>
+    completions.some(
+      (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed",
+    ),
+  ).length;
+
+  return (completedCount / visibleTasks.length) * 100;
+}
+
 export default function Dash() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
+  const [chartDate, setChartDate] = useState(new Date());
+
+  const today = getTodayDate();
 
   const loadData = useCallback(async () => {
     try {
@@ -40,142 +97,148 @@ export default function Dash() {
     loadData();
   }, [loadData]);
 
-  // Weekly chart data
-  const weeklyChartData = useMemo(() => {
-    const days = [0, 1, 2, 3, 4, 5, 6];
-    return days.map((day) => {
-      const dayTasks = tasks.filter((task) => {
-        if (task.is_recurring === 1) {
-          const weekdays = getWeekdaysArray(task.weekdays);
-          return weekdays.includes(day);
-        }
-        return true;
-      });
-      const totalTasks = dayTasks.length;
-      if (totalTasks === 0) return { day, dayName: WEEKDAY_NAMES[day], percentage: 0 };
-
-      let completedCount = 0;
-      for (const task of dayTasks) {
-        const taskCompletions = completions.filter(
-          (c) => c.task_id === task.id && c.status === "completed"
-        );
-        if (taskCompletions.length > 0) completedCount++;
-      }
-      const percentage = (completedCount / totalTasks) * 100;
-      return { day, dayName: WEEKDAY_NAMES[day], percentage };
-    });
-  }, [tasks, completions]);
-
-  // Daily chart data (last 30 days)
+  // Daily chart data: hours of the day
   const dailyChartData = useMemo(() => {
-    const last30 = getLastNDays(30);
-    return last30.map((date) => {
-      const d = new Date(date + "T12:00:00");
-      const dayOfWeek = d.getDay();
+    const hours = Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
+    const dateStr = toDateString(chartDate);
 
-      const visibleTasks = tasks.filter((task) => {
-        if (task.deleted_at) return false;
-        if (task.created_at > date) return false;
-        if (task.is_recurring === 1) {
-          const weekdays = getWeekdaysArray(task.weekdays);
-          return weekdays.includes(dayOfWeek);
-        }
-        return true;
+    completions
+      .filter((c) => c.completion_date === dateStr && c.status === "completed")
+      .forEach((c) => {
+        const hour = new Date(c.created_at).getHours();
+        hours[hour].count++;
       });
 
-      const totalTasks = visibleTasks.length;
-      if (totalTasks === 0) return { date, percentage: 0 };
+    return hours.map((h) => ({ label: `${h.hour}:00`, value: h.count }));
+  }, [completions, chartDate]);
 
-      const dateCompletions = completions.filter(
-        (c) => c.completion_date === date && c.status === "completed"
-      );
-      const completedTaskIds = new Set(dateCompletions.map((c) => c.task_id));
+  // Weekly chart data: days of the week (Mon-Sun)
+  const weeklyChartData = useMemo(() => {
+    const dayOfWeek = chartDate.getDay();
+    const monday = new Date(chartDate);
+    monday.setDate(chartDate.getDate() - ((dayOfWeek + 6) % 7));
 
-      let completedCount = 0;
-      for (const task of visibleTasks) {
-        if (completedTaskIds.has(task.id)) completedCount++;
-      }
+    const days: { label: string; value: number }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = toDateString(d);
+      const percentage = calculateDayCompliance(dateStr, tasks, completions);
+      days.push({ label: WEEKDAY_SHORT[d.getDay()], value: percentage });
+    }
+    return days;
+  }, [chartDate, tasks, completions]);
 
-      const percentage = (completedCount / totalTasks) * 100;
-      return { date, percentage };
-    });
-  }, [tasks, completions]);
-
-  // Monthly chart data: group daily data into weeks
+  // Monthly chart data: weeks of the month
   const monthlyChartData = useMemo(() => {
-    if (dailyChartData.length === 0) return [];
-    const groups: { label: string; percentage: number }[] = [];
-    for (let i = 0; i < dailyChartData.length; i += 7) {
-      const chunk = dailyChartData.slice(i, i + 7);
-      const avg = chunk.reduce((sum, d) => sum + d.percentage, 0) / chunk.length;
-      groups.push({
-        label: `Sem ${groups.length + 1}`,
-        percentage: Math.round(avg * 10) / 10,
-      });
+    const year = chartDate.getFullYear();
+    const month = chartDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Group days into weeks (Mon-Sun)
+    const weeks: string[][] = [];
+    let currentWeek: string[] = [];
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      currentWeek.push(toDateString(d));
+      if (d.getDay() === 0 || d.getTime() === lastDay.getTime()) {
+        weeks.push([...currentWeek]);
+        currentWeek = [];
+      }
     }
-    return groups;
-  }, [dailyChartData]);
 
-  // Annual chart data: last 12 months
+    return weeks.map((weekDays, i) => {
+      const avgCompliance =
+        weekDays.reduce((sum, day) => sum + calculateDayCompliance(day, tasks, completions), 0) /
+        weekDays.length;
+      return { label: `Sem ${i + 1}`, value: avgCompliance };
+    });
+  }, [chartDate, tasks, completions]);
+
+  // Annual chart data: months of the year
   const annualChartData = useMemo(() => {
-    const result: { label: string; percentage: number }[] = [];
-    const now = new Date();
+    const year = chartDate.getFullYear();
+    const months: { label: string; value: number }[] = [];
 
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = monthDate.getFullYear();
-      const month = monthDate.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const todayStr = toDateString(now);
+    for (let m = 0; m < 12; m++) {
+      const firstDay = new Date(year, m, 1);
+      const lastDay = new Date(year, m + 1, 0);
 
-      const dailyPercentages: number[] = [];
+      let totalCompliance = 0;
+      let dayCount = 0;
 
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-        if (date > todayStr) break;
-
-        const d = new Date(year, month, day, 12, 0, 0);
-        const dayOfWeek = d.getDay();
-
-        const visibleTasks = tasks.filter((task) => {
-          if (task.deleted_at) return false;
-          if (task.created_at > date) return false;
-          if (task.is_recurring === 1) {
-            const weekdays = getWeekdaysArray(task.weekdays);
-            return weekdays.includes(dayOfWeek);
-          }
-          return true;
-        });
-
-        const totalTasks = visibleTasks.length;
-        if (totalTasks === 0) continue;
-
-        const dateCompletions = completions.filter(
-          (c) => c.completion_date === date && c.status === "completed"
-        );
-        const completedTaskIds = new Set(dateCompletions.map((c) => c.task_id));
-
-        let completedCount = 0;
-        for (const task of visibleTasks) {
-          if (completedTaskIds.has(task.id)) completedCount++;
-        }
-
-        dailyPercentages.push((completedCount / totalTasks) * 100);
+      for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+        const dateStr = toDateString(d);
+        if (dateStr > today) break;
+        totalCompliance += calculateDayCompliance(dateStr, tasks, completions);
+        dayCount++;
       }
 
-      const avg = dailyPercentages.length > 0
-        ? dailyPercentages.reduce((s, p) => s + p, 0) / dailyPercentages.length
-        : 0;
-
-      result.push({
-        label: MONTH_NAMES[month],
-        percentage: Math.round(avg * 10) / 10,
-      });
+      const avgCompliance = dayCount > 0 ? totalCompliance / dayCount : 0;
+      months.push({ label: MONTH_NAMES[m], value: avgCompliance });
     }
 
-    return result;
-  }, [tasks, completions]);
+    return months;
+  }, [chartDate, tasks, completions, today]);
+
+  // Period label for navigation header
+  const chartPeriodLabel = useMemo(() => {
+    switch (chartPeriod) {
+      case 'daily':
+        return formatDateLabel(toDateString(chartDate), today);
+      case 'weekly': {
+        const dayOfWeek = chartDate.getDay();
+        const monday = new Date(chartDate);
+        monday.setDate(chartDate.getDate() - ((dayOfWeek + 6) % 7));
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        return `Semana ${monday.getDate()}-${sunday.getDate()} ${MONTH_NAMES[sunday.getMonth()]}`;
+      }
+      case 'monthly':
+        return `${MONTH_NAMES[chartDate.getMonth()]} ${chartDate.getFullYear()}`;
+      case 'annual':
+        return `${chartDate.getFullYear()}`;
+    }
+  }, [chartDate, chartPeriod, today]);
+
+  // Navigation handlers
+  const handleChartPrev = () => {
+    const d = new Date(chartDate);
+    switch (chartPeriod) {
+      case 'daily':
+        d.setDate(d.getDate() - 1);
+        break;
+      case 'weekly':
+        d.setDate(d.getDate() - 7);
+        break;
+      case 'monthly':
+        d.setMonth(d.getMonth() - 1);
+        break;
+      case 'annual':
+        d.setFullYear(d.getFullYear() - 1);
+        break;
+    }
+    setChartDate(d);
+  };
+
+  const handleChartNext = () => {
+    const d = new Date(chartDate);
+    switch (chartPeriod) {
+      case 'daily':
+        d.setDate(d.getDate() + 1);
+        break;
+      case 'weekly':
+        d.setDate(d.getDate() + 7);
+        break;
+      case 'monthly':
+        d.setMonth(d.getMonth() + 1);
+        break;
+      case 'annual':
+        d.setFullYear(d.getFullYear() + 1);
+        break;
+    }
+    setChartDate(d);
+  };
 
   if (loading) {
     return (
@@ -203,6 +266,9 @@ export default function Dash() {
         annualData={annualChartData}
         period={chartPeriod}
         onPeriodChange={setChartPeriod}
+        periodLabel={chartPeriodLabel}
+        onPrev={handleChartPrev}
+        onNext={handleChartNext}
       />
 
       {/* Total tasks */}

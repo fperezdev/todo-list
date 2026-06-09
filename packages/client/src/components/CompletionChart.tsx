@@ -9,15 +9,19 @@ import {
   LineChart,
   Line,
 } from "recharts";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useOnline } from "@/hooks/useOnline";
 
 interface CompletionChartProps {
-  dailyData: { date: string; percentage: number }[];
-  weeklyData: { day: number; dayName: string; percentage: number }[];
-  monthlyData: { label: string; percentage: number }[];
-  annualData: { label: string; percentage: number }[];
+  dailyData: { label: string; value: number }[];
+  weeklyData: { label: string; value: number }[];
+  monthlyData: { label: string; value: number }[];
+  annualData: { label: string; value: number }[];
   period: 'daily' | 'weekly' | 'monthly' | 'annual';
   onPeriodChange: (period: 'daily' | 'weekly' | 'monthly' | 'annual') => void;
+  periodLabel: string;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
 export default function CompletionChart({
@@ -27,6 +31,9 @@ export default function CompletionChart({
   annualData,
   period,
   onPeriodChange,
+  periodLabel,
+  onPrev,
+  onNext,
 }: CompletionChartProps) {
   const { isOnline } = useOnline();
 
@@ -38,6 +45,9 @@ export default function CompletionChart({
 
   const tooltipFormatter = (value: unknown) => {
     const num = typeof value === "number" ? value : Number(value ?? 0);
+    if (period === 'daily') {
+      return [`${num}`, "Completadas"];
+    }
     return [`${num.toFixed(0)}%`, "Cumplimiento"];
   };
 
@@ -62,16 +72,16 @@ export default function CompletionChart({
             <LineChart data={dailyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
-                dataKey="date"
+                dataKey="label"
                 tick={{ fontSize: 10 }}
                 stroke="#9ca3af"
-                tickFormatter={(v: string) => v.slice(5)}
+                interval={3}
               />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} stroke="#9ca3af" />
+              <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <Tooltip formatter={tooltipFormatter} contentStyle={tooltipContentStyle} />
               <Line
                 type="monotone"
-                dataKey="percentage"
+                dataKey="value"
                 stroke="#6366f1"
                 strokeWidth={2}
                 dot={{ r: 2 }}
@@ -84,10 +94,10 @@ export default function CompletionChart({
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={weeklyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="dayName" tick={{ fontSize: 12 }} stroke="#9ca3af" />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <Tooltip formatter={tooltipFormatter} contentStyle={tooltipContentStyle} />
-              <Bar dataKey="percentage" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -101,7 +111,7 @@ export default function CompletionChart({
               <Tooltip formatter={tooltipFormatter} contentStyle={tooltipContentStyle} />
               <Line
                 type="monotone"
-                dataKey="percentage"
+                dataKey="value"
                 stroke="#6366f1"
                 strokeWidth={2}
                 dot={{ r: 4 }}
@@ -117,7 +127,7 @@ export default function CompletionChart({
               <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} stroke="#9ca3af" />
               <Tooltip formatter={tooltipFormatter} contentStyle={tooltipContentStyle} />
-              <Bar dataKey="percentage" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -127,7 +137,25 @@ export default function CompletionChart({
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-500">Cumplimiento</h3>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onPrev}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Anterior"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[100px] text-center">
+            {periodLabel}
+          </span>
+          <button
+            onClick={onNext}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Siguiente"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
         <select
           value={period}
           onChange={(e) => onPeriodChange(e.target.value as CompletionChartProps['period'])}
