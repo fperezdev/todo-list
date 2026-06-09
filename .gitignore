@@ -3,3 +3,6 @@ dist
 *.local
 .env
 .wrangler
+
+# Server assets (build artifact from client)
+packages/server/public/
