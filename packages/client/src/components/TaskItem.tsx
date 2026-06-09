@@ -50,25 +50,23 @@ export default function TaskItem({ task, isCompletedToday, isSkippedToday, onCom
         <div className="flex gap-1.5 shrink-0">
           <button
             onClick={() => onComplete(task)}
-            disabled={isDone}
             className={`rounded-lg p-2 transition-colors ${
               isCompletedToday
                 ? "bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400"
                 : "bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600 dark:bg-gray-800 dark:hover:bg-green-500/20 dark:hover:text-green-400"
-            } disabled:opacity-50`}
-            title="Marcar como completada"
+            }`}
+            title={isCompletedToday ? "Desmarcar completada" : "Marcar como completada"}
           >
             <CheckCircle size={20} />
           </button>
           <button
             onClick={() => onSkip(task)}
-            disabled={isDone}
             className={`rounded-lg p-2 transition-colors ${
               isSkippedToday
                 ? "bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400"
                 : "bg-gray-100 text-gray-400 hover:bg-yellow-100 hover:text-yellow-600 dark:bg-gray-800 dark:hover:bg-yellow-500/20 dark:hover:text-yellow-400"
-            } disabled:opacity-50`}
-            title="Omitir hoy"
+            }`}
+            title={isSkippedToday ? "Desmarcar omitida" : "Omitir hoy"}
           >
             <SkipForward size={20} />
           </button>

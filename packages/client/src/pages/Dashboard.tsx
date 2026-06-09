@@ -48,28 +48,68 @@ export default function Dashboard() {
   const handleComplete = useCallback(async (task: Task) => {
     try {
       const db = getDB();
-      const id = crypto.randomUUID();
       const now = new Date().toISOString();
+
+      const existing = completions.find(
+        (c) => c.task_id === task.id && c.completion_date === today
+      );
+
+      if (existing) {
+        // Soft-delete existing completion for today
+        await db.exec({
+          sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
+          bind: [now, now, existing.id],
+        });
+      }
+
+      // If toggling off (was already completed), we're done
+      if (existing && existing.status === "completed") {
+        await loadData();
+        return;
+      }
+
+      // Insert new completed record (fresh or switching from skipped)
+      const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?)`,
         bind: [id, task.id, today, now, now],
       });
       await loadData();
     } catch {}
-  }, [today, loadData]);
+  }, [today, loadData, completions]);
 
   const handleSkip = useCallback(async (task: Task) => {
     try {
       const db = getDB();
-      const id = crypto.randomUUID();
       const now = new Date().toISOString();
+
+      const existing = completions.find(
+        (c) => c.task_id === task.id && c.completion_date === today
+      );
+
+      if (existing) {
+        // Soft-delete existing completion for today
+        await db.exec({
+          sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
+          bind: [now, now, existing.id],
+        });
+      }
+
+      // If toggling off (was already skipped), we're done
+      if (existing && existing.status === "skipped") {
+        await loadData();
+        return;
+      }
+
+      // Insert new skipped record (fresh or switching from completed)
+      const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'skipped', ?, ?)`,
         bind: [id, task.id, today, now, now],
       });
       await loadData();
     } catch {}
-  }, [today, loadData]);
+  }, [today, loadData, completions]);
 
   // Filter tasks for today
   const todayTasks = useMemo(() => {
