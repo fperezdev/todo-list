@@ -1,4 +1,5 @@
-import { CheckCircle, SkipForward } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { CheckCircle, Pencil, SkipForward } from "lucide-react";
 import type { Task } from "@/lib/types";
 
 interface TaskItemProps {
@@ -10,6 +11,7 @@ interface TaskItemProps {
 }
 
 export default function TaskItem({ task, isCompletedToday, isSkippedToday, onComplete, onSkip }: TaskItemProps) {
+  const navigate = useNavigate();
   const isDone = isCompletedToday || isSkippedToday;
 
   return (
@@ -48,6 +50,13 @@ export default function TaskItem({ task, isCompletedToday, isSkippedToday, onCom
         </div>
 
         <div className="flex gap-1.5 shrink-0">
+          <button
+            onClick={() => navigate(`/edit/${task.id}`)}
+            className="rounded-lg bg-gray-100 p-2 text-gray-400 transition-colors hover:bg-indigo-100 hover:text-indigo-600 dark:bg-gray-800 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-400"
+            title="Editar tarea"
+          >
+            <Pencil size={20} />
+          </button>
           <button
             onClick={() => onComplete(task)}
             className={`rounded-lg p-2 transition-colors ${
