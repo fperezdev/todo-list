@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
+import { ArrowLeft } from "lucide-react";
 import { getDB } from "@/lib/db";
 import WeekdayPicker from "@/components/WeekdayPicker";
 
@@ -43,7 +44,16 @@ export default function AddTask() {
         <title>Todo List - Nueva tarea</title>
       </Helmet>
 
-      <h1 className="text-xl font-bold">Nueva tarea</h1>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          title="Volver"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-xl font-bold">Nueva tarea</h1>
+      </div>
 
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div>

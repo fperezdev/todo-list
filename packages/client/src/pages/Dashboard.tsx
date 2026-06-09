@@ -127,6 +127,23 @@ export default function Dashboard() {
     });
   }, [tasks, completions, today, todayDayOfWeek]);
 
+  // Tasks completed or skipped today
+  const managedTasks = useMemo(() => {
+    return tasks
+      .filter((task) => {
+        const comp = completions.find(
+          (c) => c.task_id === task.id && c.completion_date === today
+        );
+        return comp !== undefined;
+      })
+      .map((task) => {
+        const comp = completions.find(
+          (c) => c.task_id === task.id && c.completion_date === today
+        )!;
+        return { task, status: comp.status };
+      });
+  }, [tasks, completions, today]);
+
   // Check if a task is completed/skipped today
   const getTaskTodayStatus = useCallback(
     (taskId: string): { completed: boolean; skipped: boolean } => {
@@ -336,6 +353,27 @@ export default function Dashboard() {
             );
           })}
         </div>
+      )}
+
+      {/* Managed tasks */}
+      {managedTasks.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Tareas gestionadas
+          </h2>
+          <div className="space-y-3">
+            {managedTasks.map(({ task, status }) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                isCompletedToday={status === "completed"}
+                isSkippedToday={status === "skipped"}
+                onComplete={handleComplete}
+                onSkip={handleSkip}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Chart */}
