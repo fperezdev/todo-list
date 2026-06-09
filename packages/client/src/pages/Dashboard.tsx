@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
   const [managedOpen, setManagedOpen] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState(true);
 
   const today = getTodayDate();
   const todayDayOfWeek = new Date().getDay();
@@ -319,43 +320,59 @@ export default function Dashboard() {
         <title>Todo List - Inicio</title>
       </Helmet>
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Tareas de hoy</h1>
-        <Link
-          to="/add"
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          + Nueva
-        </Link>
-      </div>
-
-      {todayTasks.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-gray-400">No hay tareas para hoy</p>
+      {/* Pending tasks accordion */}
+      <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center justify-between p-4">
+          <button
+            onClick={() => setPendingOpen(!pendingOpen)}
+            className="flex items-center gap-2"
+          >
+            <span className="text-lg font-bold">Tareas de hoy</span>
+            <ChevronDown
+              size={18}
+              className={`text-gray-400 transition-transform ${pendingOpen ? "rotate-180" : ""}`}
+            />
+          </button>
           <Link
             to="/add"
-            className="mt-3 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
-            Crear una nueva tarea
+            + Nueva
           </Link>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {todayTasks.map((task) => {
-            const status = getTaskTodayStatus(task.id);
-            return (
-              <TaskItem
-                key={task.id}
-                task={task}
-                isCompletedToday={status.completed}
-                isSkippedToday={status.skipped}
-                onComplete={handleComplete}
-                onSkip={handleSkip}
-              />
-            );
-          })}
-        </div>
-      )}
+
+        {pendingOpen && (
+          <div className="border-t border-gray-200 p-4 dark:border-gray-800">
+            {todayTasks.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-gray-400">No hay tareas para hoy</p>
+                <Link
+                  to="/add"
+                  className="mt-3 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  Crear una nueva tarea
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {todayTasks.map((task) => {
+                  const status = getTaskTodayStatus(task.id);
+                  return (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      isCompletedToday={status.completed}
+                      isSkippedToday={status.skipped}
+                      onComplete={handleComplete}
+                      onSkip={handleSkip}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Managed tasks accordion */}
       {managedTasks.length > 0 && (
