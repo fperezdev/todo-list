@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import { getDB } from "@/lib/db";
 import { getTodayDate, getWeekdaysArray, getLastNDays, WEEKDAY_NAMES, toDateString } from "@/lib/utils";
 import type { Task, TaskCompletion } from "@/lib/types";
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loading, setLoading] = useState(true);
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
+  const [managedOpen, setManagedOpen] = useState(false);
 
   const today = getTodayDate();
   const todayDayOfWeek = new Date().getDay();
@@ -355,25 +357,36 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Managed tasks */}
+      {/* Managed tasks accordion */}
       {managedTasks.length > 0 && (
-        <>
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-            Tareas gestionadas
-          </h2>
-          <div className="space-y-3">
-            {managedTasks.map(({ task, status }) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                isCompletedToday={status === "completed"}
-                isSkippedToday={status === "skipped"}
-                onComplete={handleComplete}
-                onSkip={handleSkip}
-              />
-            ))}
-          </div>
-        </>
+        <div className="rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          <button
+            onClick={() => setManagedOpen(!managedOpen)}
+            className="flex w-full items-center justify-between p-4 text-left"
+          >
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Tareas gestionadas ({managedTasks.length})
+            </span>
+            <ChevronDown
+              size={18}
+              className={`text-gray-400 transition-transform ${managedOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+          {managedOpen && (
+            <div className="space-y-3 border-t border-gray-200 p-4 dark:border-gray-800">
+              {managedTasks.map(({ task, status }) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  isCompletedToday={status === "completed"}
+                  isSkippedToday={status === "skipped"}
+                  onComplete={handleComplete}
+                  onSkip={handleSkip}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Chart */}
