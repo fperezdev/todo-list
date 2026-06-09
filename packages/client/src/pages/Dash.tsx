@@ -203,128 +203,66 @@ export default function Dash() {
 
   // Stats for the current period
   const stats = useMemo(() => {
-    const totalTasks = tasks.length;
-    let completedTasks = 0;
-    let totalPossibleTasks = 0;
+    // Total tasks: all tasks that exist up to today
+    const todayDate = new Date(today + "T12:00:00");
+    const totalTasks = tasks.filter((task) => {
+      const taskCreatedDate = task.created_at.split("T")[0];
+      return taskCreatedDate <= today;
+    }).length;
+
+    // Get date range for the period
+    let startDate: Date;
+    let endDate: Date;
 
     switch (chartPeriod) {
       case 'daily': {
-        const dateStr = toDateString(chartDate);
-        const dayOfWeek = chartDate.getDay();
-        
-        const visibleTasks = tasks.filter((task) => {
-          const taskCreatedDate = task.created_at.split("T")[0];
-          if (taskCreatedDate > dateStr) return false;
-          if (task.is_recurring === 1) {
-            const weekdays = getWeekdaysArray(task.weekdays);
-            return weekdays.includes(dayOfWeek);
-          }
-          return taskCreatedDate === dateStr;
-        });
-        
-        totalPossibleTasks = visibleTasks.length;
-        completedTasks = visibleTasks.filter((task) =>
-          completions.some(
-            (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
-          )
-        ).length;
+        startDate = new Date(chartDate);
+        endDate = new Date(chartDate);
         break;
       }
       case 'weekly': {
         const dayOfWeek = chartDate.getDay();
         const monday = new Date(chartDate);
         monday.setDate(chartDate.getDate() - ((dayOfWeek + 6) % 7));
-        
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(monday);
-          d.setDate(monday.getDate() + i);
-          const dateStr = toDateString(d);
-          const dayOfWeek2 = d.getDay();
-          
-          const visibleTasks = tasks.filter((task) => {
-            const taskCreatedDate = task.created_at.split("T")[0];
-            if (taskCreatedDate > dateStr) return false;
-            if (task.is_recurring === 1) {
-              const weekdays = getWeekdaysArray(task.weekdays);
-              return weekdays.includes(dayOfWeek2);
-            }
-            return taskCreatedDate === dateStr;
-          });
-          
-          totalPossibleTasks += visibleTasks.length;
-          completedTasks += visibleTasks.filter((task) =>
-            completions.some(
-              (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
-            )
-          ).length;
-        }
+        startDate = monday;
+        endDate = new Date(monday);
+        endDate.setDate(monday.getDate() + 6);
         break;
       }
       case 'monthly': {
         const year = chartDate.getFullYear();
         const month = chartDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        
-        for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-          const dateStr = toDateString(d);
-          const dayOfWeek = d.getDay();
-          
-          const visibleTasks = tasks.filter((task) => {
-            const taskCreatedDate = task.created_at.split("T")[0];
-            if (taskCreatedDate > dateStr) return false;
-            if (task.is_recurring === 1) {
-              const weekdays = getWeekdaysArray(task.weekdays);
-              return weekdays.includes(dayOfWeek);
-            }
-            return taskCreatedDate === dateStr;
-          });
-          
-          totalPossibleTasks += visibleTasks.length;
-          completedTasks += visibleTasks.filter((task) =>
-            completions.some(
-              (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
-            )
-          ).length;
-        }
+        startDate = new Date(year, month, 1);
+        endDate = new Date(year, month + 1, 0);
         break;
       }
       case 'annual': {
         const year = chartDate.getFullYear();
-        
-        for (let m = 0; m < 12; m++) {
-          const firstDay = new Date(year, m, 1);
-          const lastDay = new Date(year, m + 1, 0);
-          
-          for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-            const dateStr = toDateString(d);
-            if (dateStr > today) break;
-            const dayOfWeek = d.getDay();
-            
-            const visibleTasks = tasks.filter((task) => {
-              const taskCreatedDate = task.created_at.split("T")[0];
-              if (taskCreatedDate > dateStr) return false;
-              if (task.is_recurring === 1) {
-                const weekdays = getWeekdaysArray(task.weekdays);
-                return weekdays.includes(dayOfWeek);
-              }
-              return taskCreatedDate === dateStr;
-            });
-            
-            totalPossibleTasks += visibleTasks.length;
-            completedTasks += visibleTasks.filter((task) =>
-              completions.some(
-                (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
-              )
-            ).length;
-          }
-        }
+        startDate = new Date(year, 0, 1);
+        endDate = new Date(year, 11, 31);
         break;
       }
     }
 
-    const completionPercentage = totalPossibleTasks > 0 
-      ? Math.round((completedTasks / totalPossibleTasks) * 100) 
+    // Don't count future days
+    if (endDate > todayDate) {
+      endDate = todayDate;
+    }
+
+    const startDateStr = toDateString(startDate);
+    const endDateStr = toDateString(endDate);
+
+    // Completed tasks: unique tasks that have at least one 'completed' completion in the period
+    const completedTaskIds = new Set<string>();
+    completions.forEach((c) => {
+      if (c.status === "completed" && c.completion_date >= startDateStr && c.completion_date <= endDateStr) {
+        completedTaskIds.add(c.task_id);
+      }
+    });
+
+    const completedTasks = completedTaskIds.size;
+    const completionPercentage = totalTasks > 0 
+      ? Math.round((completedTasks / totalTasks) * 100) 
       : 0;
 
     return { totalTasks, completedTasks, completionPercentage };
