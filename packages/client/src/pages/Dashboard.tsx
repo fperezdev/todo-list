@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { getDB } from "@/lib/db";
 import { getTodayDate, getWeekdaysArray, getLastNDays, WEEKDAY_NAMES, toDateString } from "@/lib/utils";
 import type { Task, TaskCompletion } from "@/lib/types";
@@ -15,6 +15,34 @@ const MONTH_NAMES: Record<number, string> = {
   8: "Sep", 9: "Oct", 10: "Nov", 11: "Dic",
 };
 
+const WEEKDAY_FULL: Record<number, string> = {
+  0: "Domingo", 1: "Lunes", 2: "Martes", 3: "Miércoles",
+  4: "Jueves", 5: "Viernes", 6: "Sábado",
+};
+
+function formatDateLabel(dateStr: string, todayStr: string): string {
+  if (dateStr === todayStr) return "Hoy";
+  
+  const date = new Date(dateStr + "T12:00:00");
+  const today = new Date(todayStr + "T12:00:00");
+  const diffTime = date.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 1) return "Mañana";
+  if (diffDays === -1) return "Ayer";
+  
+  const weekday = WEEKDAY_FULL[date.getDay()];
+  const day = date.getDate();
+  const month = MONTH_NAMES[date.getMonth()];
+  return `${weekday} ${day} ${month}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(dateStr + "T12:00:00");
+  date.setDate(date.getDate() + days);
+  return toDateString(date);
+}
+
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
@@ -22,9 +50,12 @@ export default function Dashboard() {
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
   const [managedOpen, setManagedOpen] = useState(false);
   const [pendingOpen, setPendingOpen] = useState(true);
+  const [selectedDate, setSelectedDate] = useState(getTodayDate());
 
   const today = getTodayDate();
-  const todayDayOfWeek = new Date().getDay();
+  const selectedDayOfWeek = new Date(selectedDate + "T12:00:00").getDay();
+  const isViewingToday = selectedDate === today;
+  const dateLabel = formatDateLabel(selectedDate, today);
 
   const loadData = useCallback(async () => {
     try {
@@ -54,11 +85,11 @@ export default function Dashboard() {
       const now = new Date().toISOString();
 
       const existing = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === today
+        (c) => c.task_id === task.id && c.completion_date === selectedDate
       );
 
       if (existing) {
-        // Soft-delete existing completion for today
+        // Soft-delete existing completion for selected date
         await db.exec({
           sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
           bind: [now, now, existing.id],
@@ -75,11 +106,11 @@ export default function Dashboard() {
       const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?)`,
-        bind: [id, task.id, today, now, now],
+        bind: [id, task.id, selectedDate, now, now],
       });
       await loadData();
     } catch {}
-  }, [today, loadData, completions]);
+  }, [selectedDate, loadData, completions]);
 
   const handleSkip = useCallback(async (task: Task) => {
     try {
@@ -87,11 +118,11 @@ export default function Dashboard() {
       const now = new Date().toISOString();
 
       const existing = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === today
+        (c) => c.task_id === task.id && c.completion_date === selectedDate
       );
 
       if (existing) {
-        // Soft-delete existing completion for today
+        // Soft-delete existing completion for selected date
         await db.exec({
           sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
           bind: [now, now, existing.id],
@@ -108,50 +139,50 @@ export default function Dashboard() {
       const id = crypto.randomUUID();
       await db.exec({
         sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'skipped', ?, ?)`,
-        bind: [id, task.id, today, now, now],
+        bind: [id, task.id, selectedDate, now, now],
       });
       await loadData();
     } catch {}
-  }, [today, loadData, completions]);
+  }, [selectedDate, loadData, completions]);
 
-  // Filter tasks for today
+  // Filter tasks for selected date
   const todayTasks = useMemo(() => {
     return tasks.filter((task) => {
       if (task.is_recurring === 1) {
         const weekdays = getWeekdaysArray(task.weekdays);
-        return weekdays.includes(todayDayOfWeek);
+        return weekdays.includes(selectedDayOfWeek);
       }
-      // One-time task: show if not completed/skipped today
-      const todayCompletion = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === today
+      // One-time task: show if not completed/skipped on selected date
+      const dateCompletion = completions.find(
+        (c) => c.task_id === task.id && c.completion_date === selectedDate
       );
-      if (todayCompletion) return false; // already completed or skipped
+      if (dateCompletion) return false; // already completed or skipped
       return true;
     });
-  }, [tasks, completions, today, todayDayOfWeek]);
+  }, [tasks, completions, selectedDate, selectedDayOfWeek]);
 
-  // Tasks completed or skipped today
+  // Tasks completed or skipped on selected date
   const managedTasks = useMemo(() => {
     return tasks
       .filter((task) => {
         const comp = completions.find(
-          (c) => c.task_id === task.id && c.completion_date === today
+          (c) => c.task_id === task.id && c.completion_date === selectedDate
         );
         return comp !== undefined;
       })
       .map((task) => {
         const comp = completions.find(
-          (c) => c.task_id === task.id && c.completion_date === today
+          (c) => c.task_id === task.id && c.completion_date === selectedDate
         )!;
         return { task, status: comp.status };
       });
-  }, [tasks, completions, today]);
+  }, [tasks, completions, selectedDate]);
 
-  // Check if a task is completed/skipped today
+  // Check if a task is completed/skipped on selected date
   const getTaskTodayStatus = useCallback(
     (taskId: string): { completed: boolean; skipped: boolean } => {
       const comp = completions.find(
-        (c) => c.task_id === taskId && c.completion_date === today
+        (c) => c.task_id === taskId && c.completion_date === selectedDate
       );
       if (!comp) return { completed: false, skipped: false };
       return {
@@ -159,7 +190,7 @@ export default function Dashboard() {
         skipped: comp.status === "skipped",
       };
     },
-    [completions, today]
+    [completions, selectedDate]
   );
 
   // Weekly chart data
@@ -327,25 +358,49 @@ export default function Dashboard() {
             onClick={() => setPendingOpen(!pendingOpen)}
             className="flex items-center gap-2"
           >
-            <span className="text-lg font-bold">Tareas de hoy</span>
+            <span className="text-lg font-bold">{dateLabel}</span>
             <ChevronDown
               size={18}
               className={`text-gray-400 transition-transform ${pendingOpen ? "rotate-180" : ""}`}
             />
           </button>
-          <Link
-            to="/add"
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            + Nueva
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="Día anterior"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            {!isViewingToday && (
+              <button
+                onClick={() => setSelectedDate(today)}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+              >
+                Hoy
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="Día siguiente"
+            >
+              <ChevronRight size={18} />
+            </button>
+            <Link
+              to="/add"
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + Nueva
+            </Link>
+          </div>
         </div>
 
         {pendingOpen && (
           <div className="border-t border-gray-200 p-4 dark:border-gray-800">
             {todayTasks.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-gray-400">No hay tareas para hoy</p>
+                <p className="text-gray-400">No hay tareas para este día</p>
                 <Link
                   to="/add"
                   className="mt-3 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400"
