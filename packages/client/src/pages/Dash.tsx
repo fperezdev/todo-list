@@ -201,6 +201,135 @@ export default function Dash() {
     }
   }, [chartDate, chartPeriod, today]);
 
+  // Stats for the current period
+  const stats = useMemo(() => {
+    const totalTasks = tasks.length;
+    let completedTasks = 0;
+    let totalPossibleTasks = 0;
+
+    switch (chartPeriod) {
+      case 'daily': {
+        const dateStr = toDateString(chartDate);
+        const dayOfWeek = chartDate.getDay();
+        
+        const visibleTasks = tasks.filter((task) => {
+          const taskCreatedDate = task.created_at.split("T")[0];
+          if (taskCreatedDate > dateStr) return false;
+          if (task.is_recurring === 1) {
+            const weekdays = getWeekdaysArray(task.weekdays);
+            return weekdays.includes(dayOfWeek);
+          }
+          return taskCreatedDate === dateStr;
+        });
+        
+        totalPossibleTasks = visibleTasks.length;
+        completedTasks = visibleTasks.filter((task) =>
+          completions.some(
+            (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
+          )
+        ).length;
+        break;
+      }
+      case 'weekly': {
+        const dayOfWeek = chartDate.getDay();
+        const monday = new Date(chartDate);
+        monday.setDate(chartDate.getDate() - ((dayOfWeek + 6) % 7));
+        
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          const dateStr = toDateString(d);
+          const dayOfWeek2 = d.getDay();
+          
+          const visibleTasks = tasks.filter((task) => {
+            const taskCreatedDate = task.created_at.split("T")[0];
+            if (taskCreatedDate > dateStr) return false;
+            if (task.is_recurring === 1) {
+              const weekdays = getWeekdaysArray(task.weekdays);
+              return weekdays.includes(dayOfWeek2);
+            }
+            return taskCreatedDate === dateStr;
+          });
+          
+          totalPossibleTasks += visibleTasks.length;
+          completedTasks += visibleTasks.filter((task) =>
+            completions.some(
+              (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
+            )
+          ).length;
+        }
+        break;
+      }
+      case 'monthly': {
+        const year = chartDate.getFullYear();
+        const month = chartDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        
+        for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+          const dateStr = toDateString(d);
+          const dayOfWeek = d.getDay();
+          
+          const visibleTasks = tasks.filter((task) => {
+            const taskCreatedDate = task.created_at.split("T")[0];
+            if (taskCreatedDate > dateStr) return false;
+            if (task.is_recurring === 1) {
+              const weekdays = getWeekdaysArray(task.weekdays);
+              return weekdays.includes(dayOfWeek);
+            }
+            return taskCreatedDate === dateStr;
+          });
+          
+          totalPossibleTasks += visibleTasks.length;
+          completedTasks += visibleTasks.filter((task) =>
+            completions.some(
+              (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
+            )
+          ).length;
+        }
+        break;
+      }
+      case 'annual': {
+        const year = chartDate.getFullYear();
+        
+        for (let m = 0; m < 12; m++) {
+          const firstDay = new Date(year, m, 1);
+          const lastDay = new Date(year, m + 1, 0);
+          
+          for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+            const dateStr = toDateString(d);
+            if (dateStr > today) break;
+            const dayOfWeek = d.getDay();
+            
+            const visibleTasks = tasks.filter((task) => {
+              const taskCreatedDate = task.created_at.split("T")[0];
+              if (taskCreatedDate > dateStr) return false;
+              if (task.is_recurring === 1) {
+                const weekdays = getWeekdaysArray(task.weekdays);
+                return weekdays.includes(dayOfWeek);
+              }
+              return taskCreatedDate === dateStr;
+            });
+            
+            totalPossibleTasks += visibleTasks.length;
+            completedTasks += visibleTasks.filter((task) =>
+              completions.some(
+                (c) => c.task_id === task.id && c.completion_date === dateStr && c.status === "completed"
+              )
+            ).length;
+          }
+        }
+        break;
+      }
+    }
+
+    const completionPercentage = totalPossibleTasks > 0 
+      ? Math.round((completedTasks / totalPossibleTasks) * 100) 
+      : 0;
+
+    return { totalTasks, completedTasks, completionPercentage };
+  }, [chartPeriod, chartDate, tasks, completions, today]);
+
   // Navigation handlers
   const handleChartPrev = () => {
     const d = new Date(chartDate);
@@ -259,6 +388,22 @@ export default function Dash() {
 
       <h1 className="text-xl font-bold">Estadísticas</h1>
 
+      {/* Stats summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-3 text-center dark:border-gray-800 dark:bg-gray-900">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalTasks}</p>
+          <p className="text-xs text-gray-500">Total</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 text-center dark:border-gray-800 dark:bg-gray-900">
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.completedTasks}</p>
+          <p className="text-xs text-gray-500">Completadas</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 text-center dark:border-gray-800 dark:bg-gray-900">
+          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{stats.completionPercentage}%</p>
+          <p className="text-xs text-gray-500">Cumplimiento</p>
+        </div>
+      </div>
+
       <CompletionChart
         dailyData={dailyChartData}
         weeklyData={weeklyChartData}
@@ -270,15 +415,6 @@ export default function Dash() {
         onPrev={handleChartPrev}
         onNext={handleChartNext}
       />
-
-      {/* Total tasks */}
-      {tasks.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <p className="text-sm font-medium text-gray-500">
-            {tasks.length} tarea{tasks.length !== 1 ? "s" : ""} en total
-          </p>
-        </div>
-      )}
 
       <div className="h-20" />
     </div>

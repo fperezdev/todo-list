@@ -82,56 +82,23 @@ export default function Dashboard() {
       const now = new Date().toISOString();
 
       const existing = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === selectedDate
+        (c) => c.task_id === task.id && c.completion_date === selectedDate && c.status === "completed"
       );
 
       if (existing) {
+        // Toggle off: soft-delete the completion
         await db.exec({
           sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
           bind: [now, now, existing.id],
         });
-      }
-
-      if (existing && existing.status === "completed") {
-        await loadData();
-        return;
-      }
-
-      const id = crypto.randomUUID();
-      await db.exec({
-        sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?)`,
-        bind: [id, task.id, selectedDate, now, now],
-      });
-      await loadData();
-    } catch {}
-  }, [selectedDate, loadData, completions]);
-
-  const handleSkip = useCallback(async (task: Task) => {
-    try {
-      const db = getDB();
-      const now = new Date().toISOString();
-
-      const existing = completions.find(
-        (c) => c.task_id === task.id && c.completion_date === selectedDate
-      );
-
-      if (existing) {
+      } else {
+        // Toggle on: insert new completion
+        const id = crypto.randomUUID();
         await db.exec({
-          sql: `UPDATE task_completions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
-          bind: [now, now, existing.id],
+          sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'completed', ?, ?)`,
+          bind: [id, task.id, selectedDate, now, now],
         });
       }
-
-      if (existing && existing.status === "skipped") {
-        await loadData();
-        return;
-      }
-
-      const id = crypto.randomUUID();
-      await db.exec({
-        sql: `INSERT INTO task_completions (id, task_id, completion_date, status, created_at, updated_at) VALUES (?, ?, ?, 'skipped', ?, ?)`,
-        bind: [id, task.id, selectedDate, now, now],
-      });
       await loadData();
     } catch {}
   }, [selectedDate, loadData, completions]);
@@ -141,7 +108,7 @@ export default function Dashboard() {
     return tasks.filter((task) => {
       // Check if task has completion on selected date - if so, it's managed, not pending
       const hasCompletion = completions.some(
-        (c) => c.task_id === task.id && c.completion_date === selectedDate
+        (c) => c.task_id === task.id && c.completion_date === selectedDate && c.status === "completed"
       );
       if (hasCompletion) return false;
 
@@ -161,35 +128,22 @@ export default function Dashboard() {
 
   // Managed tasks: tasks with completion on selected date
   const managedTasks = useMemo(() => {
-    return tasks
-      .filter((task) => {
-        // Task must be created on or before selected date
-        const taskCreatedDate = task.created_at.split("T")[0].split(" ")[0];
-        if (taskCreatedDate > selectedDate) return false;
+    return tasks.filter((task) => {
+      // Task must be created on or before selected date
+      const taskCreatedDate = task.created_at.split("T")[0].split(" ")[0];
+      if (taskCreatedDate > selectedDate) return false;
 
-        const comp = completions.find(
-          (c) => c.task_id === task.id && c.completion_date === selectedDate
-        );
-        return comp !== undefined;
-      })
-      .map((task) => {
-        const comp = completions.find(
-          (c) => c.task_id === task.id && c.completion_date === selectedDate
-        )!;
-        return { task, status: comp.status };
-      });
+      return completions.some(
+        (c) => c.task_id === task.id && c.completion_date === selectedDate && c.status === "completed"
+      );
+    });
   }, [tasks, completions, selectedDate]);
 
-  const getTaskStatus = useCallback(
-    (taskId: string): { completed: boolean; skipped: boolean } => {
-      const comp = completions.find(
-        (c) => c.task_id === taskId && c.completion_date === selectedDate
+  const isTaskCompleted = useCallback(
+    (taskId: string): boolean => {
+      return completions.some(
+        (c) => c.task_id === taskId && c.completion_date === selectedDate && c.status === "completed"
       );
-      if (!comp) return { completed: false, skipped: false };
-      return {
-        completed: comp.status === "completed",
-        skipped: comp.status === "skipped",
-      };
     },
     [completions, selectedDate]
   );
@@ -266,19 +220,14 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-2">
-            {pendingTasks.map((task) => {
-              const status = getTaskStatus(task.id);
-              return (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  isCompletedToday={status.completed}
-                  isSkippedToday={status.skipped}
-                  onComplete={handleComplete}
-                  onSkip={handleSkip}
-                />
-              );
-            })}
+            {pendingTasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                isCompleted={isTaskCompleted(task.id)}
+                onComplete={handleComplete}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -302,14 +251,12 @@ export default function Dashboard() {
             {managedTasks.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-4">Sin tareas gestionadas</p>
             ) : (
-              managedTasks.map(({ task, status }) => (
+              managedTasks.map((task) => (
                 <TaskItem
                   key={task.id}
                   task={task}
-                  isCompletedToday={status === "completed"}
-                  isSkippedToday={status === "skipped"}
+                  isCompleted={true}
                   onComplete={handleComplete}
-                  onSkip={handleSkip}
                 />
               ))
             )}
